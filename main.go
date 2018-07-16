@@ -20,6 +20,7 @@ func main() {
 	}
 	filaMQTT := cfg.Section("").Key("fila").Value()
 	serverMQTT := cfg.Section("").Key("servidor_url").Value()
+	relayComandoInverso := cfg.Section("").Key("relay_inverso").Value()
 	if len(filaMQTT) < 10 || len(serverMQTT) < 10 {
 		panic("Erro ao carregar arquivo de configuração: não foi possivel carregar os valores do server ou da fila MQTT")
 	}
@@ -34,10 +35,24 @@ func main() {
 			switch msgText {
 			case "1":
 				fmt.Println("Ligando relay...")
-				relay.On()
+				if relayComandoInverso == "0" {
+					err = relay.On()
+				} else {
+					err = relay.Off()
+				}
+				if err != nil {
+					fmt.Printf("Erro ao ligar o relay: %+v\n", err)
+				}
 			case "0":
 				fmt.Println("Desligando relay...")
-				relay.Off()
+				if relayComandoInverso == "0" {
+					err = relay.Off()
+				} else {
+					err = relay.On()
+				}
+				if err != nil {
+					fmt.Printf("Erro ao desligar o relay: %+v\n", err)
+				}
 			}
 		})
 	}
