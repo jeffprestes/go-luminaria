@@ -1,7 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"net"
+	"time"
 
 	"gobot.io/x/gobot"
 	"gobot.io/x/gobot/drivers/gpio"
@@ -13,7 +15,7 @@ import (
 
 func main() {
 
-	fmt.Println("Carregando arquivo de configuração...")
+	log.Println("Carregando arquivo de configuração...")
 	cfg, err := ini.Load("config.ini")
 	if err != nil {
 		panic("Erro ao carregar arquivo de configuração: " + err.Error())
@@ -24,34 +26,36 @@ func main() {
 	if len(filaMQTT) < 10 || len(serverMQTT) < 10 {
 		panic("Erro ao carregar arquivo de configuração: não foi possivel carregar os valores do server ou da fila MQTT")
 	}
-	fmt.Println("Iniciando a configuração do Raspberry...")
+	log.Println("Iniciando a configuração do Raspberry...")
 	raspiAdaptor := raspi.NewAdaptor()
 	relay := gpio.NewRelayDriver(raspiAdaptor, "11")
-	fmt.Println("Iniciando a conexão com o servidor MQTT...")
+	log.Println("Iniciando a conexão com o servidor MQTT...")
 	mqttAdaptor := mqtt.NewAdaptor(serverMQTT, "luminaria-jeff")
+	mqttAdaptor.SetAutoReconnect(true)
+	mqttAdaptor.Publish(filaMQTT, []byte("Iniciando lumunaria em: "+getIPAddresses()))
 	work := func() {
 		mqttAdaptor.On(filaMQTT, func(msg mqtt.Message) {
 			msgText := string(msg.Payload())
 			switch msgText {
 			case "1":
-				fmt.Println("Ligando relay...")
+				log.Println("Ligando relay...")
 				if relayComandoInverso == "0" {
 					err = relay.On()
 				} else {
 					err = relay.Off()
 				}
 				if err != nil {
-					fmt.Printf("Erro ao ligar o relay: %+v\n", err)
+					log.Printf("Erro ao ligar o relay: %+v\n", err)
 				}
 			case "0":
-				fmt.Println("Desligando relay...")
+				log.Println("Desligando relay...")
 				if relayComandoInverso == "0" {
 					err = relay.Off()
 				} else {
 					err = relay.On()
 				}
 				if err != nil {
-					fmt.Printf("Erro ao desligar o relay: %+v\n", err)
+					log.Printf("Erro ao desligar o relay: %+v\n", err)
 				}
 			}
 		})
@@ -61,5 +65,35 @@ func main() {
 		[]gobot.Device{relay},
 		work,
 	)
-	robot.Start()
+	err = robot.Start()
+	if err != nil {
+		log.Fatalln("Erro ao iniciar a luminaria")
+	}
+	gobot.Every(2*time.Second, func() {
+		if !robot.Running() {
+			log.Println("Tentando reiniciar a luminaria...")
+			err = robot.Start()
+			if err != nil {
+				log.Fatalln("Erro ao reiniciar a luminaria")
+			}
+			return
+		}
+		mqttAdaptor.Publish(filaMQTT, []byte("Luminaria OK em "+getIPAddresses()))
+		log.Println("Luminaria ok")
+	})
+}
+
+func getIPAddresses() (ips string) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Println("getIPAddresses ", err.Error())
+	}
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				ips += ipnet.IP.String() + " - "
+			}
+		}
+	}
+	return
 }
