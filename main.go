@@ -36,26 +36,27 @@ func main() {
 	work := func() {
 		mqttAdaptor.On(filaMQTT, func(msg mqtt.Message) {
 			msgText := string(msg.Payload())
+			var errRelay error
 			switch msgText {
 			case "1":
 				log.Println("Ligando relay...")
 				if relayComandoInverso == "0" {
-					err = relay.On()
+					errRelay = relay.On()
 				} else {
-					err = relay.Off()
+					errRelay = relay.Off()
 				}
-				if err != nil {
-					log.Printf("Erro ao ligar o relay: %+v\n", err)
+				if errRelay != nil {
+					log.Printf("Erro ao ligar o relay: %+v\n", errRelay)
 				}
 			case "0":
 				log.Println("Desligando relay...")
 				if relayComandoInverso == "0" {
-					err = relay.Off()
+					errRelay = relay.Off()
 				} else {
-					err = relay.On()
+					errRelay = relay.On()
 				}
-				if err != nil {
-					log.Printf("Erro ao desligar o relay: %+v\n", err)
+				if errRelay != nil {
+					log.Printf("Erro ao desligar o relay: %+v\n", errRelay)
 				}
 			}
 		})
